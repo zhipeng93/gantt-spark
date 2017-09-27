@@ -1,10 +1,10 @@
 # To parse the json Log into control messages and others
 import json
+import sys
 
 LAST_STAGE_COMPLETE_TIME = -1
 MS_TO_NS = 1000000
 DRIVER = 0
-
 
 class Executor:
     def __init__(self, executor_id, core_num):
@@ -13,7 +13,7 @@ class Executor:
 
 
 class CompletedStage:
-    ## handle taskCompletionEvents
+    # handle taskCompletionEvents
     def __init__(self, jlog):
         info = jlog["Stage Info"]
         self.id = int(info["Stage ID"])
@@ -150,10 +150,8 @@ class Task:
         # and putResultIntoLocalBlockManger
         return self.task_put_result_into_local_blockmanager_end_ts - self.task_decode_taskdesc_start_ts
 
-
     def computing_duration(self):
         return self.executor_duration() - self.shuffle_read - self.shuffle_write - self.deserialize_executor_duration()
-
 
     def get_result_duration(self):
         if self.getting_result_time_ts == 0:
@@ -162,11 +160,9 @@ class Task:
             assert self.finish_time_ts > self.getting_result_time_ts
             return self.finish_time_ts - self.getting_result_time_ts
 
-
     def total_duration(self):
         # include scheduler delay, executor_duration, driver getting result
         return self.finish_time_ts - self.launch_time_ts
-
 
     def scheduler_delay(self):
         res = self.total_duration() - self.executor_duration() - self.get_result_duration()
@@ -176,16 +172,16 @@ class Task:
 
 class ScheduledTask:
     # tasks whose time are rescheduled according to the driver
-    def __init__(self, task, start_time, end_time, worker_id):
+    def __init__(self, task, start_time, end_time, thread_id):
         self.task = task
         self.start_time = start_time
         self.end_time = end_time
-        self.worker_id = worker_id
+        self.thread_id = thread_id
 
 
 class Thread:
-    def __init__(self, worker_id, index, busy_until):
-        self.worker_id = worker_id
+    def __init__(self, thread_id, index, busy_until):
+        self.thread_id = thread_id
         self.index = index
         self.busy_until = busy_until
 
@@ -200,13 +196,13 @@ class SparkState:
         self.skipped = dict()  # stageId --> -1. record skipped stages
 
         self.task_queue = list()  # a list of tasks
-        self.prev_worker_id = 0  # DRIVER is 0
+        self.prev_thread_id = 0  # DRIVER is 0
         self.executor_core_num = default_cores
         self.delay_split = delay_split
 
-    def generate_worker_id(self):  # logically it is thread Id
-        self.prev_worker_id += 1
-        return self.prev_worker_id
+    def generate_thread_id(self):  # logically it is thread Id
+        self.prev_thread_id += 1
+        return self.prev_thread_id
 
     def add_executor(self, executor):
         assert not executor.executorId in self.executors
@@ -218,10 +214,10 @@ class SparkState:
 
         threads_list = list()
         for i in range(self.executor_core_num):
-            threads_list.append(Thread(self.generate_worker_id(), i, 0))
+            threads_list.append(Thread(self.generate_thread_id(), i, 0))
         # what is the index used for?
-        # the workerId here is a global one, say we have 10 machines,
-        # each with 8 cores, then the workerId ranges from 1 to 80, Driver is 0.
+        # the executorId here is a global one, say we have 10 machines,
+        # each with 8 cores, then the executorId ranges from 1 to 80, Driver is 0.
 
         self.threads[executor_id] = threads_list
 
@@ -282,9 +278,9 @@ class SparkState:
             to_use_thread = max(lambda x: x.busy_until, available_threads)
             to_use_thread_x = to_use_thread[0]
             to_use_thread_x.busy_until = end_time
-            stage.workers[to_use_thread_x.worker_id] = -1  # mean this thread is in use now.
+            stage.workers[to_use_thread_x.thread_id] = -1  # mean this thread is in use now.
 
-            scheduled_task = ScheduledTask(task, start_time, end_time, to_use_thread_x.worker_id)
+            scheduled_task = ScheduledTask(task, start_time, end_time, to_use_thread_x.thread_id)
             stage.schedule.append(scheduled_task)
 
         self.processed.update(processed_stages)
@@ -342,7 +338,7 @@ class SparkState:
 
             for scheduled in stage.schedule:
                 task = scheduled.task
-                worker = scheduled.worker_id
+                worker = scheduled.thread_id
                 send_ts = task.launch_time_ts
                 recv_ts = scheduled.start_time
 
@@ -424,12 +420,12 @@ class SparkState:
 
 def write_duration(thread_id, start_ts, duration, eventType, operator):
     print "activityType:{}=start_ts:{}=duration:{}=workerId:{}=stageId:{}".format(eventType, start_ts, duration,
-                                                                                    thread_id, operator)
+                                                                                  thread_id, operator)
 
 
 def write_control(sender, send_ts, receiver, recv_ts):
     print "activityType:ControlMessage=sender:{}=send_ts:{}=receiver:{}=recv_ts:{}".format(sender, send_ts, receiver,
-                                                                                             recv_ts)
+                                                                                           recv_ts)
 
 
 def convert(inf, core_num, delay_split):
@@ -439,7 +435,10 @@ def convert(inf, core_num, delay_split):
 
 
 if __name__ == "__main__":
-    inf = "xx"
-    executor_cores = 8
-    delay_split = 1
+    if len(sys.argv) < 4:
+        print "python _.py inf executor_cores delay_split"
+        exit()
+    inf = sys.argv[1]
+    executor_cores = int(sys.argv[2])
+    delay_split = float(sys.argv[3])
     convert(inf, executor_cores, delay_split)
