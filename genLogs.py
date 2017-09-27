@@ -7,10 +7,6 @@ DRIVER = 0
 
 
 class Executor:
-    # def __init__(self, jlog):
-    #   self.executorId = jlog["Executor ID"]
-    #        self.cores = jlog["Executor Info"]["Total Cores"]
-
     def __init__(self, executor_id, core_num):
         self.executorId = executor_id
         self.cores = core_num
@@ -238,11 +234,13 @@ class SparkState:
             if parent not in self.processed:
                 self.skipped[parent] = -1
 
+        self.submitted[stage_id] = submitted_stage
+
     def complete_stage(self, completed_stage):
         stage_id = completed_stage.id
-        # assert stage_id in self.submitted
-        # assert stage_id not in self.completed
-        # assert stage_id not in self.skipped
+        assert stage_id in self.submitted
+        assert stage_id not in self.completed
+        assert stage_id not in self.skipped
 
         submitted_stage = self.submitted.pop(stage_id, None)  # remove the stage from submitted
         self.completed[stage_id] = completed_stage
@@ -263,8 +261,10 @@ class SparkState:
 
         for stage_id in self.completed:
             stage = self.completed[stage_id]
-            # assert stage_id not in self.processed
+            assert stage_id not in self.processed
             self.processed[stage_id] = ProcessedStage(stage)
+
+        self.completed.clear()
 
         processed_stages = self.processed  # processed stages, constructed from completed stages
 
@@ -288,6 +288,11 @@ class SparkState:
             stage.schedule.append(scheduled_task)
 
         self.processed.update(processed_stages)
+
+        del self.task_queue[:]
+        self.completed.clear()
+        assert len(self.task_queue) == 0
+        assert len(self.completed) == 0
 
     def add_task(self, task):
         # check whether we need to add a new executor
@@ -338,9 +343,8 @@ class SparkState:
             for scheduled in stage.schedule:
                 task = scheduled.task
                 worker = scheduled.worker_id
-                send_ts = task.lanuch_ts
-                recv_ts
-                scheduled.start_time
+                send_ts = task.launch_time_ts
+                recv_ts = scheduled.start_time
 
                 local_start = task.task_deserialize_start_ts
                 write_control(DRIVER, send_ts, worker, recv_ts)
@@ -348,7 +352,7 @@ class SparkState:
                 if task.task_decode_taskdesc_end_ts - task.task_decode_taskdesc_start_ts > 0:
                     write_duration(worker, task.task_decode_taskdesc_start_ts + recv_ts - local_start,
                                    task.task_decode_taskdesc_end_ts - task.task_decode_taskdesc_start_ts,
-                                   "DecodeTaskDesc", op)
+                                   "DecodeDesc", op)
 
                 # task deserize and executor deserize
                 write_duration(worker, task.task_deserialize_start_ts + recv_ts - local_start,
@@ -383,49 +387,48 @@ class SparkState:
                                "PuttingIntoBlockManager", op)
 
                 # transformations
-                if task.seq_op_start > 0:
-                    write_duration(worker, task.seq_op_start + recv_ts - local_start,
-                                   task.seq_op_end - task.seq_op_start, "SeqOp", op)
+                # if task.seq_op_start_ts > 0:
+                #     write_duration(worker, task.seq_op_start_ts + recv_ts - local_start,
+                #                    task.seq_op_end_ts - task.seq_op_start_ts, "SeqOp", op)
 
-                if task.map_partition_with_index_start > 0:
-                    write_duration(worker, task.map_partition_with_index_start + recv_ts - local_start,
-                                   task.map_partition_with_index_end - task.map_partition_with_index_start,
-                                   "MapPartitionWithIndex", op)
+                # if task.map_partition_with_index_start_ts > 0:
+                #     write_duration(worker, task.map_partition_with_index_start_ts + recv_ts - local_start,
+                #                    task.map_partition_with_index_end_ts - task.map_partition_with_index_start_ts,
+                #                    "MapPartitionWithIndex", op)
 
-                if task.com_op_start > 0:
-                    write_duration(worker, task.com_op_start + recv_ts - local_start,
-                                   task.com_op_end - task.com_op_start, "CombOp", op)
+                # if task.com_op_start_ts > 0:
+                #     write_duration(worker, task.com_op_start_ts + recv_ts - local_start,
+                #                    task.com_op_end_ts - task.com_op_start_ts, "CombOp", op)
 
-                if task.input_map_start > 0:
-                    write_duration(worker, task.input_map_start + recv_ts - local_start,
-                                   task.input_map_end - task.input_map_start, "InputMap", op)
+                # if task.input_map_start_ts > 0:
+                #     write_duration(worker, task.input_map_start_ts + recv_ts - local_start,
+                #                    task.input_map_end_ts - task.input_map_start_ts, "InputMap", op)
 
-                if task.sample_filter_start > 0:
-                    write_duration(worker, task.sample_filter_start + recv_ts - local_start,
-                                   task.sample_filter_end - task.sample_filter_start, "Sample", op)
+                # if task.sample_filter_start_ts > 0:
+                #     write_duration(worker, task.sample_filter_start_ts + recv_ts - local_start,
+                #                    task.sample_filter_end_ts - task.sample_filter_start_ts, "Sample", op)
 
                 # communication edge for sending back the result
                 send_ts = task.task_put_result_into_local_blockmanager_end_ts + recv_ts - local_start
                 # Before recv_ts is the driver time when executor starts to run.
-                recv_ts = task.getting_result_ts.unwrap_or(task.finish_ts)
                 if task.getting_result_time_ts == 0:
-                    recv_ts = task.finish_ts
+                    recv_ts = task.finish_time_ts
                 else:
                     recv_ts = task.getting_result_time_ts
                 write_control(worker, send_ts, DRIVER, recv_ts)
                 # if we have it, emit a getting result activity at the driver
 
                 if not task.getting_result_time_ts == 0:
-                    write_duration(DRIVER, send_ts, task.getting_result_duration(), "GettingResult", op)
+                    write_duration(DRIVER, send_ts, task.get_result_duration(), "GettingResult", op)
 
 
 def write_duration(thread_id, start_ts, duration, eventType, operator):
-    print "activityType:{}=start_ts:{}=duration:{}=workerId:{}=stageId:{}\n".format(eventType, start_ts, duration,
+    print "activityType:{}=start_ts:{}=duration:{}=workerId:{}=stageId:{}".format(eventType, start_ts, duration,
                                                                                     thread_id, operator)
 
 
 def write_control(sender, send_ts, receiver, recv_ts):
-    print "activityType:ControlMessage=sender:{}=send_ts:{}=receiver:{}=recv_ts:{}\n".format(sender, send_ts, receiver,
+    print "activityType:ControlMessage=sender:{}=send_ts:{}=receiver:{}=recv_ts:{}".format(sender, send_ts, receiver,
                                                                                              recv_ts)
 
 
@@ -436,7 +439,7 @@ def convert(inf, core_num, delay_split):
 
 
 if __name__ == "__main__":
-    inf = "resultLogs"
+    inf = "xx"
     executor_cores = 8
     delay_split = 1
     convert(inf, executor_cores, delay_split)
