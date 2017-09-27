@@ -47,29 +47,10 @@ class CompletedStage:
 
 class ProcessedStage:
     # stages that have been processed, have start_time and end_time aligned with those on driver.
-    def __init__(self, completed_stage):
-        # somethings needed here.
-        self.id = completed_stage.id
-        self.submission_ts = completed_stage.submission_ts
-        self.completion_ts = completed_stage.completion_ts
-        self.parents = completed_stage.parents
-
+    def __init__(self, completed_stage):        
         self.workers = dict()  # which thread has been involved in the computation of this stage
         self.schedule = list()  # stores ScheduledTask
-
-        self.num_tasks = completed_stage.num_tasks
-
-        self.broadcast_start_ts = completed_stage.broadcast_start_ts
-        self.broadcast_end_ts = completed_stage.broadcast_end_ts
-        self.destory_broadcast_start_ts = completed_stage.destory_broadcast_start_ts
-        self.destory_broadcast_end_ts = completed_stage.destory_broadcast_end_ts
-        self.update_weight_start_ts = completed_stage.update_weight_start_ts
-        self.update_weight_end_ts = completed_stage.update_weight_end_ts
-        self.judge_converge_start_ts = completed_stage.judge_converge_start_ts
-        self.judge_converge_end_ts = completed_stage.judge_converge_end_ts
-
-        self.last_completion_ts = completed_stage.last_completion_ts
-        self.parents = completed_stage.parents
+        self.stage_info = completed_stage
 
 
 class SubmittedStage:
@@ -319,22 +300,23 @@ class SparkState:
     def write_logs(self):
         for stageId in self.processed:
             stage = self.processed[stageId]
-            op = stage.id
+            stage_info = stage.stage_info
+            op = stage_info.id
 
-            if stage.broadcast_start_ts > 0:
-                write_duration(DRIVER, stage.broadcast_start_ts,
-                               stage.broadcast_end_ts - stage.broadcast_start_ts, "Broadcast", op)
-            if stage.destory_broadcast_start_ts > 0:
-                write_duration(DRIVER, stage.destory_broadcast_start_ts,
-                               stage.destory_broadcast_end_ts - stage.destory_broadcast_start_ts, "DestoryBroadcast",
+            if stage_info.broadcast_start_ts > 0:
+                write_duration(DRIVER, stage_info.broadcast_start_ts,
+                               stage_info.broadcast_end_ts - stage_info.broadcast_start_ts, "Broadcast", op)
+            if stage_info.destory_broadcast_start_ts > 0:
+                write_duration(DRIVER, stage_info.destory_broadcast_start_ts,
+                               stage_info.destory_broadcast_end_ts - stage_info.destory_broadcast_start_ts, "DestoryBroadcast",
                                op)
-            if stage.update_weight_start_ts > 0:
-                write_duration(DRIVER, stage.update_weight_start_ts,
-                               stage.update_weight_end_ts - stage.update_weight_start_ts, "UpdateWeight", op)
+            if stage_info.update_weight_start_ts > 0:
+                write_duration(DRIVER, stage_info.update_weight_start_ts,
+                               stage_info.update_weight_end_ts - stage_info.update_weight_start_ts, "UpdateWeight", op)
 
-            if stage.judge_converge_start_ts > 0:
-                write_duration(DRIVER, stage.judge_converge_start_ts,
-                               stage.judge_converge_end_ts - stage.judge_converge_start_ts, "JudgeConverge", op)
+            if stage_info.judge_converge_start_ts > 0:
+                write_duration(DRIVER, stage_info.judge_converge_start_ts,
+                               stage_info.judge_converge_end_ts - stage_info.judge_converge_start_ts, "JudgeConverge", op)
 
             for scheduled in stage.schedule:
                 task = scheduled.task
