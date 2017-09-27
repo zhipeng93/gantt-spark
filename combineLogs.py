@@ -183,4 +183,4 @@ if __name__ == "__main__":
 	spark_logs = app_dir + "/spark_part_log"
 	common_logs = app_dir + "/task_common_log"
 	transformation_logs = app_dir + "/task_transformation_log"
-	combine(spark_logs, common_logs, transformation_logs, "resources/resultLogs/resultLogs")
+	combine(spark_logs, common_logs, transformation_logs, app_dir + "/combined_log")
