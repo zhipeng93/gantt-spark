@@ -5,11 +5,11 @@ import sys
 
 attr_access = lambda i, y: [x[i] for x in y]
 FONTSIZE = 20
-optAvazuLoss = 0.34
-delta = 0.05 # 0.001
-tolerance = optAvazuLoss + delta
+OptURLLoss = 0.046
+delta = 0.1 # 0.001
+tolerance = OptURLLoss + delta
 tolerance_str = "tolerance_" + str(delta)
-NUM_TUPLE_SMALL=4041784
+NUM_TUPLE_SMALL=2396130
 
 def formatNumber(num):
 	# convert 4041784 --> 4M
@@ -36,9 +36,9 @@ def formatNumber(num):
 		return str(num)
 
 def getLabelByFileName(inf):
-	# file name is: gd-0.000001-5-6-1-1
+	# file name is: 0.000001-5-6-1-1
 	infos = inf.strip().split("-")
-	infos[1] = str(formatNumber(float(infos[1]) * NUM_TUPLE_SMALL))
+	infos[0] = str(formatNumber(float(infos[0]) * NUM_TUPLE_SMALL))
 	return "-".join(infos)
 
 def read_tuples(inf):
@@ -65,6 +65,9 @@ def read_tuples(inf):
 			times.append((times[-1] + _start_ts - last_end_ts) / 1000.0) #
 			# last iteration complete time plus this iteration duration
 
+	for t, k in enumerate(times):
+		print t, k
+
 	return times, iteration_Ids, losses, numTuples
 
 
@@ -72,7 +75,7 @@ def draw_curves(outf, infs):
 	# input some files with multi variables changes, each curve is good and not-shaking 
 	# the legend is the name of input file
 
-	fig_title = "Legend Format: minibatchSize-workerNum-coreNumber-stepSize-partitionPerCore"
+	fig_title = "Legend Format: minibatchSize-workerNum-coreNumber-stepSize-reg"
 
 	
 	file_num = len(infs)

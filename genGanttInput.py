@@ -7,9 +7,12 @@ MS_TO_NS = 1000000
 DRIVER = 0
 
 class Executor:
-    def __init__(self, executor_id, core_num):
+    def __init__(self, executor_id, core_num, calibrate_delta):
         self.executorId = executor_id
         self.cores = core_num
+        self.calibrate_delta = calibrate_delta
+        # driver_clock + calibrate_delta = executor_clock, need to be calibrated.
+        # i.e, executor_clock - calibrate_delta = "driver_clock"
 
 
 class CompletedStage:
@@ -22,7 +25,7 @@ class CompletedStage:
         print "minSubmission:{}".format(self.submission_ts)
 
         self.completion_ts = float(info["Completion Time"]) * MS_TO_NS  # ms -> ns
-        print "minSubmission:{}".format(self.completion_ts)
+        print "minCompletion:{}".format(self.completion_ts)
 
         self.num_tasks = int(info["Number of Tasks"])
         self.broadcast_start_ts = float(jlog["BroadcastStartsTime"]) * MS_TO_NS
@@ -33,6 +36,9 @@ class CompletedStage:
         self.update_weight_end_ts = float(jlog["updateWeightOnDriverEndsTime"]) * MS_TO_NS
         self.judge_converge_start_ts = float(jlog["JudgeConvergeStartsTime"]) * MS_TO_NS
         self.judge_converge_end_ts = float(jlog["JudgeConvergeEndsTime"]) * MS_TO_NS
+        
+        self.send_broadcast_task_bin = float(jlog["BroadcastTaskBinEnds"]) * MS_TO_NS 
+        # the time when driver starts to broadcast task binary
 
         self.last_completion_ts = self.submission_ts
         global LAST_STAGE_COMPLETE_TIME
@@ -119,6 +125,13 @@ class Task:
         self.com_op_start_ts = float(jlog["logCombOpStart"]) * MS_TO_NS
         self.com_op_end_ts = float(jlog["logCombOpEnd"]) * MS_TO_NS
 
+        self.get_broadcast_bin_start = float(jlog["getBroadcastBinaryStart"]) * MS_TO_NS
+        self.driver_send_task_desc_time = float(jlog["driverSendTaskDescTime"]) * MS_TO_NS
+        self.executor_get_task_desc_time = float(jlog["ExecutorGetTaskDescTime"]) * MS_TO_NS
+        self.task_end_send_result_via_RPC_time = float(jlog["taskEndSendResultViaRPCTime"]) * MS_TO_NS
+        self.driver_get_result_via_RPC = float(jlog["DirverGetResultViaRPCTime"]) * MS_TO_NS
+        
+
     def deserialize_executor_duration(self):
         return self.executor_deserize_end_ts - self.executor_deserize_start_ts
 
@@ -168,7 +181,7 @@ class Thread:
 
 
 class SparkState:
-    def __init__(self, delay_split, default_cores):
+    def __init__(self, default_cores, calibrate_time):
         self.executors = dict()  # executorId --> Executor
         self.threads = dict()  # executorId --> list[Thread]
         self.submitted = dict()  # stageId --> SubmittedStage, stages just submitted, not all tasks are seen
@@ -179,7 +192,7 @@ class SparkState:
         self.task_queue = list()  # a list of tasks
         self.prev_thread_id = 0  # DRIVER is 0
         self.executor_core_num = default_cores
-        self.delay_split = delay_split
+        self.calibrate_time = calibrate_time
 
     def generate_thread_id(self):  # logically it is thread Id
         self.prev_thread_id += 1
@@ -247,9 +260,13 @@ class SparkState:
 
         for task in self.task_queue:
             stage = processed_stages[task.stageId]
-            shipping_delay = self.delay_split * task.scheduler_delay()
+
+            executor_id = task.executorId
+
+            # shipping_delay = self.delay_split * task.scheduler_delay()
+            # not using shipping delay anymore, directly use executorTime - calibrateTime
             task_duration = task.executor_duration()
-            start_time = task.launch_time_ts + shipping_delay
+            start_time = task.executor_get_task_desc_time - self.calibrate_time[executor_id]
             end_time = start_time + task_duration  # the time when getting result starts
 
             available_threads = filter(lambda x: x.busy_until < start_time, self.threads[task.executorId])
@@ -257,6 +274,9 @@ class SparkState:
             # why we want to use the most recently one? This is not correct but a assumption.
             # because two cores have no strong connections, since they are logical concepts
             to_use_thread = max(lambda x: x.busy_until, available_threads)
+            if len(to_use_thread) == 0:
+                print "No thread available now, consider change the delay-split"
+                exit()
             to_use_thread_x = to_use_thread[0]
             to_use_thread_x.busy_until = end_time
             stage.workers[to_use_thread_x.thread_id] = -1  # mean this thread is in use now.
@@ -274,7 +294,7 @@ class SparkState:
     def add_task(self, task):
         # check whether we need to add a new executor
         if task.executorId not in self.executors:
-            executor = Executor(task.executorId, self.executor_core_num)
+            executor = Executor(task.executorId, self.executor_core_num, self.calibrate_time[task.executorId])
             self.add_executor(executor)
 
         self.task_queue.append(task)
@@ -287,7 +307,7 @@ class SparkState:
                 executorId = int(jlog["Executor ID"])
                 core_nums = int(jlog["Executor Info"]["Total Cores"])
 
-                self.add_executor(Executor(executorId, core_nums))
+                self.add_executor(Executor(executorId, core_nums, self.calibrate_time[executorId]))
             elif eventType == "SparkListenerTaskEnd":
                 self.add_task(Task(jlog))
             elif eventType == "SparkListenerStageSubmitted":
@@ -321,23 +341,25 @@ class SparkState:
             for scheduled in stage.schedule:
                 task = scheduled.task
                 worker = scheduled.thread_id
-                send_ts = task.launch_time_ts
+                send_ts = task.driver_send_task_desc_time
                 recv_ts = scheduled.start_time
+                local_executor_delta = self.calibrate_time[task.executorId]
 
                 local_start = task.task_deserialize_start_ts
+                # driver send RPC to executors, that you can start now
                 write_control(DRIVER, send_ts, worker, recv_ts)
 
                 if task.task_decode_taskdesc_end_ts - task.task_decode_taskdesc_start_ts > 0:
-                    write_duration(worker, task.task_decode_taskdesc_start_ts + recv_ts - local_start,
+                    write_duration(worker, task.task_decode_taskdesc_start_ts - local_executor_delta,
                                    task.task_decode_taskdesc_end_ts - task.task_decode_taskdesc_start_ts,
                                    "DecodeDesc", op)
 
                 # task deserize and executor deserize
-                write_duration(worker, task.task_deserialize_start_ts + recv_ts - local_start,
+                write_duration(worker, task.task_deserialize_start_ts - local_executor_delta,
                                task.executor_deserize_end_ts - task.task_deserialize_start_ts,
                                "Deserialization", op)
 
-                start_read = task.executor_deserize_end_ts + recv_ts - local_start
+                start_read = task.executor_deserize_end_ts - local_executor_delta
                 if task.shuffle_read > 0:
                     write_duration(worker, start_read, task.shuffle_read,
                                    "ShuffleRead", op)
@@ -352,15 +374,15 @@ class SparkState:
                     write_duration(worker, start_shuffle_write, task.shuffle_write,
                                    "ShuffleWrite", op)
 
-                write_duration(worker, task.task_result_serialize_start_ts + recv_ts - local_start,
+                write_duration(worker, task.task_result_serialize_start_ts - local_executor_delta,
                                task.task_result_serialize_end_ts - task.task_result_serialize_start_ts,
                                "Serialization", op)
 
-                write_duration(worker, task.task_result_serialize2_start_ts + recv_ts - local_start,
+                write_duration(worker, task.task_result_serialize2_start_ts - local_executor_delta,
                                task.task_result_serialize2_end_ts - task.task_result_serialize2_start_ts,
                                "Serialization", op)
 
-                write_duration(worker, task.task_put_result_into_local_blockmanager_start_ts + recv_ts - local_start,
+                write_duration(worker, task.task_put_result_into_local_blockmanager_start_ts - local_executor_delta,
                                task.task_put_result_into_local_blockmanager_end_ts - task.task_put_result_into_local_blockmanager_start_ts,
                                "PuttingIntoBlockManager", op)
 
@@ -387,12 +409,13 @@ class SparkState:
                 #                    task.sample_filter_end_ts - task.sample_filter_start_ts, "Sample", op)
 
                 # communication edge for sending back the result
-                send_ts = task.task_put_result_into_local_blockmanager_end_ts + recv_ts - local_start
+                send_ts = task.task_put_result_into_local_blockmanager_end_ts - local_executor_delta
                 # Before recv_ts is the driver time when executor starts to run.
                 if task.getting_result_time_ts == 0:
                     recv_ts = task.finish_time_ts
                 else:
                     recv_ts = task.getting_result_time_ts
+                # notify the driver that task has been finished, you can get the results.
                 write_control(worker, send_ts, DRIVER, recv_ts)
                 # if we have it, emit a getting result activity at the driver
 
@@ -410,17 +433,29 @@ def write_control(sender, send_ts, receiver, recv_ts):
                                                                                            recv_ts)
 
 
-def convert(inf, core_num, delay_split):
-    ss = SparkState(delay_split, core_num)
+def convert(inf, core_num, executor_num, calibrate_file):
+    executor_calibrate = [0] * (executor_num + 1)
+    for line in open(calibrate_file):
+        if line.startswith("#"):
+            continue
+        else:
+            exe_id, min_x, max_x = line.strip().split()
+            executor_calibrate[int(exe_id)] = float(min_x) * MS_TO_NS # default use the min_x
+
+    ss = SparkState(core_num, executor_calibrate)
+
     ss.read_json(inf)
     ss.write_logs()
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 4:
-        print "python _.py inf executor_cores delay_split"
+        print "python _.py inf executor_cores executor_num calibrate_file"
         exit()
     inf = sys.argv[1]
     executor_cores = int(sys.argv[2])
-    delay_split = float(sys.argv[3])
-    convert(inf, executor_cores, delay_split)
+    executor_num = int(sys.argv[3])
+    calibrate_file = sys.argv[4]
+    # delay_split = float(sys.argv[3])
+
+    convert(inf, executor_cores, executor_num, calibrate_file)

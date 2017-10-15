@@ -127,6 +127,8 @@ def processDriverInfo(glogs):
 	"DestroyBroadcastStartsTime", "DestroyBroadcastEndsTime",
 	"updateWeightOnDriverStartsTime", "updateWeightOnDriverEndsTime",
 	 "JudgeConvergeStartsTime", "JudgeConvergeEndsTime"]
+	 # "BroadcastTaskBinEnds", "driverSendTaskDescViaRPC"]
+	 # task
 	# logFormat: xxxxxx ghandCP=IterationId:1=BroadcastStartsTime:1505037507302
 	for driver in DriverInfo:
 		driver.setDefaultAttr(driverAttr, 0)
@@ -138,6 +140,12 @@ def processDriverInfo(glogs):
 				name, value = infos[2].strip().split(":")
 				stageId = iterationId * 3 + 5 # e.g., 200-iteration is for stage 605.
 				DriverInfo[stageId].setAttrByName(name, value)
+		if "BroadcastTaskBin" in line:
+			infos = line.strip().split("=")
+			stageId = int(infos[2].split(":")[1])
+			name, value = infos[3].split(":") # BroadcastTaskBinEnds
+			DriverInfo[stageId].setAttrByName(name, value)
+
 
 	return DriverInfo
 
@@ -174,6 +182,39 @@ def processTaskInfo(glogs):
 			taskId = int(infos[2].split(":")[1])
 			name, value = infos[3].split(":")
 			TaskInfos[taskId].setAttrByName(name, value)
+		if "getBroadcastBinaryStart" in line: # get taskBinary sent via broadcast
+			infos = line.strip().split("=")
+			taskId = int(infos[1].split(":")[1])
+			name, value = infos[2].split(":")
+			TaskInfos[taskId].setAttrByName(name, value)
+		if "driverSendTaskDesc" in line: # send taskDesc via RPC
+			infos = line.strip().split("=")
+			taskId = int(infos[2].split(":")[1])
+			name, value = infos[3].split(":")
+			TaskInfos[taskId].setAttrByName(name, value)
+		if "ExecutorGetTaskDesc" in line: # get taskDesc via RPC
+			infos = line.strip().split("=")
+			taskId = int(infos[2].split(":")[1])
+			name, value = infos[3].split(":")
+			TaskInfos[taskId].setAttrByName(name, value)
+		if "taskEndSendResultViaRPC" in line:
+			infos = line.strip().split("=")
+			taskId = int(infos[2].split(":")[1])
+			name, value = infos[3].split(":")
+			TaskInfos[taskId].setAttrByName(name, value)
+		if "DirverGetResultViaRPC" in line:
+			infos = line.strip().split("=")
+			taskId = int(infos[2].split(":")[1])
+			name, value = infos[3].split(":")
+			TaskInfos[taskId].setAttrByName(name, value)
+		if "driverGetResultStartTime" in line:
+			infos = line.strip().split("=")
+			taskId = int(infos[2].split(":")[1])
+			name, value = infos[3].split(":")
+			TaskInfos[taskId].setAttrByName(name, value)
+			name, value = infos[4].split(":")
+			TaskInfos[taskId].setAttrByName(name, value)
+
 
 	return TaskInfos
 

@@ -1,0 +1,20 @@
+
+# Log format for different type of logs, i.e., ControlMessage between different workers and activity on a single GPU.
+activityType:ControlMessage=sender:GPUID=send_ts:TIMESTAMP=receiver:GPUID=recv_ts:TIMESTAMP
+activityType:XXXXXX=start_ts:TIMESTAMP=duration:TIMESTAMP=workerId:GPUID
+
+# Example logs:
+minSubmisssion:TIMESTAMP
+minCompletion:TIMESTAMP
+activityType:ControlMessage=sender:0=send_ts:1.50774543845e+18=receiver:1=recv_ts:1.50774543846e+18
+activityType:Deserialization=start_ts:1.50774543846e+18=duration:177999872.0=workerId:1
+activityType:Computing=start_ts:1.50774543864e+18=duration:425224656.0=workerId:1
+activityType:ShuffleWrite=start_ts:1.50774543907e+18=duration:1775152.0=workerId:1
+activityType:Serialization=start_ts:1.50774543906e+18=duration:0.0=workerId:1
+activityType:Serialization=start_ts:1.50774543906e+18=duration:0.0=workerId:1
+activityType:PuttingIntoBlockManager=start_ts:1.50774543906e+18=duration:999936.0=workerId:1
+activityType:ControlMessage=sender:1=send_ts:1.50774543907e+18=receiver:0=recv_ts:1.50774543907e+18
+activityType:ControlMessage=sender:0=send_ts:1.50774543845e+18=receiver:41=recv_ts:1.50774543846e+18
+activityType:Deserialization=start_ts:1.50774543846e+18=duration:192000000.0=workerId:41
+
+

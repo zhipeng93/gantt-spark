@@ -1,5 +1,5 @@
 # BedPig
-If you have some logs from different systems, like single-thread programs, nulti-thread programs, or distributed systems, you can use this tool to generate the gantt chart, so that you can analyze the bottleneck of your code via looking at the gantt chart.
+If you have some logs from different systems, like single-thread programs, multi-thread programs, or distributed systems, you can use this tool to generate the gantt chart and analyze the bottleneck of your code via looking at the gantt chart.
 
 ## toy example
 Here we use Spark to show the example. We have two parts of logs, the first one comes from Spark event logger, the second one is extracted on our own.
@@ -9,7 +9,8 @@ The whole process is as follows:
 1. download the logs from your server.
 2. select the stages you want to profile via jobFilter.py
 3. combine the self-logs with spark-logs with combineLogs.py
+4. use calibrate.py to re-calibrate the clock on different executors, since different machines can have different clock times.
 4. use genGanttInput.py to generate the logs that can be used for drawing gantt chart
 5. draw the gantt chart with pltGantt.py.
 
-If you are interested in how to profile Spark, you can contact me.
+If you are interested in how to profile Spark, please contact me.
