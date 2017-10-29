@@ -17,7 +17,8 @@ class Executor_Delta:
 			self.max_x = min(self.max_x, executor_minus_driver_time)
 		if not self.min_x is None:
 			if self.min_x > self.max_x:
-				print "xx", self.min_x, self.max_x
+				pass
+				# print "xx", self.min_x, self.max_x
 
 	def update_min(self, executor_minus_driver_time):
 		if self.min_x == None:
@@ -26,7 +27,8 @@ class Executor_Delta:
 			self.min_x = max(executor_minus_driver_time, self.min_x)
 		if not self.max_x is None:
 			if self.min_x > self.max_x:
-				print "xx", self.min_x, self.max_x
+				# print "xx", self.min_x, self.max_x
+				pass
 
 
 exe_delta = [Executor_Delta() for i in range(executor_num + 1)]
