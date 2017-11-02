@@ -7,7 +7,7 @@ Here we use Spark to show the example. We have two parts of logs, the first one 
 The whole process is as follows:
 
 1. download the logs from your server.
-2. select the stages you want to profile via jobFilter.py
+2. select the jobs you want to profile via jobFilter.py
 3. combine the self-logs with spark-logs with combineLogs.py
 4. use calibrate.py to re-calibrate the clock on different executors, since different machines can have different clock times.
 4. use genGanttInput.py to generate the logs that can be used for drawing gantt chart
