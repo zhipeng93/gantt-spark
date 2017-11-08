@@ -130,6 +130,8 @@ class Task:
         self.executor_get_task_desc_time = float(jlog["ExecutorGetTaskDescTime"]) * MS_TO_NS
         self.task_end_send_result_via_RPC_time = float(jlog["taskEndSendResultViaRPCTime"]) * MS_TO_NS
         self.driver_get_result_via_RPC = float(jlog["DirverGetResultViaRPCTime"]) * MS_TO_NS
+        self.driver_get_result_start_ts = float(jlog["driverGetResultStartTime"]) * MS_TO_NS
+        self.driver_get_result_end_ts = float(jlog["driverGetResultEndTime"]) * MS_TO_NS
         
 
     def deserialize_executor_duration(self):
@@ -409,18 +411,20 @@ class SparkState:
                 #                    task.sample_filter_end_ts - task.sample_filter_start_ts, "Sample", op)
 
                 # communication edge for sending back the result
-                send_ts = task.task_put_result_into_local_blockmanager_end_ts - local_executor_delta
-                # Before recv_ts is the driver time when executor starts to run.
-                if task.getting_result_time_ts == 0:
-                    recv_ts = task.finish_time_ts
-                else:
-                    recv_ts = task.getting_result_time_ts
-                # notify the driver that task has been finished, you can get the results.
+                send_ts = task.task_end_send_result_via_RPC_time - local_executor_delta
+                recv_ts = task.driver_get_result_via_RPC
                 write_control(worker, send_ts, DRIVER, recv_ts)
-                # if we have it, emit a getting result activity at the driver
+                # Before recv_ts is the driver time when executor starts to run.
+                # if task.getting_result_time_ts == 0:
+                #     recv_ts = task.finish_time_ts
+                # else:
+                #     recv_ts = task.getting_result_time_ts
+                # # notify the driver that task has been finished, you can get the results.
+                # write_control(worker, send_ts, DRIVER, recv_ts)
+                # # if we have it, emit a getting result activity at the driver
 
                 if not task.getting_result_time_ts == 0:
-                    write_duration(DRIVER, send_ts, task.get_result_duration(), "GettingResult", op)
+                    write_duration(DRIVER, task.driver_get_result_start_ts, task.driver_get_result_end_ts - task.driver_get_result_start_ts, "GettingResult", op)
 
 
 def write_duration(thread_id, start_ts, duration, eventType, operator):
