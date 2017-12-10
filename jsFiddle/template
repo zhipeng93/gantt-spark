@@ -1,0 +1,44 @@
+AmCharts.useUTC = true;
+var chart = AmCharts.makeChart("chartdiv", {
+  "type": "gantt",
+  "theme": "light",
+  "period": "fff",
+  "dataDateFormat": "YYYY-MM-DD HH:NN:SS",
+  "balloonDateFormat": "QQQ",
+  "columnWidth": 0.5,
+  "marginBottom": 30,
+  "valueAxis": {
+    "type": "date",
+    "minPeriod": "fff",
+    "ignoreAxisWidth": true
+  },
+  "brightnessStep": 0,
+  "graph": {
+    "fillAlphas": 1,
+    "balloonText": "<b>[[task]]</b>: [[duration]]ms"
+  },
+  "rotate": true,
+  "categoryField": "category",
+  "segmentsField": "segments",
+  "colorField": "color",
+  "startDate": "2015-01-01 00:00:00",
+  "startField": "start",
+  "endField": "end",
+  "durationField": "duration",
+  "dataProvider": [
+  // ==================insert tasks here. =======================
+  ],
+  "valueScrollbar": {
+    "autoGridCount": true
+  },
+  "chartCursor": {
+    "cursorColor": "#55bb76",
+    "valueBalloonsEnabled": false,
+    "cursorAlpha": 0,
+    "valueLineAlpha": 0.5,
+    "valueLineBalloonEnabled": true,
+    "valueLineEnabled": true,
+    "zoomable": false,
+    "valueZoomable": true
+  }
+});

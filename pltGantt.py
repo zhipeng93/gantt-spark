@@ -61,7 +61,7 @@ def drawGantt(num_executor, num_core, log_file):
 	frame.set_ylabel("Executor-ID-core-ID")
 	# plt.suptitle(fig_title)
 	frame.grid()
-	frame.axis([-.5, 50, -0.5, num_executor * num_core + 0.5])
+	frame.axis([-.5, 100, -0.5, num_executor * num_core + 0.5])
 
 	frame.set_yticks(xrange(num_core * num_executor + 1), minor=False)
 	frame.set_yticklabels(y_ticks)

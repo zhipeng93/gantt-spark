@@ -1,2 +1,8 @@
 # sending weight
-application_1509550415084_0056_1 self-logs/kddb-1-8-1-0.00001-0.01 1 8 bach16
+#application_1509550415084_0056_1 self-logs/kddb-1-8-1-0.00001-0.01 1 8 bach16
+#application_1511172707588_0096_1 self-logs/kdd12-1-8-1-0.000001-0.1 1 8 bach16
+#application_1511172707588_0097_1 self-logs/kdd12-1-8-1-0.000001-0.1 1 8 bach16
+#application_1511172707588_0098_1 self-logs/kdd12-1-8-1-0.000001-0.1 1 8 bach16
+application_1512839220296_0018_1 self-logs/kdd12-1-8-1-0.000001-0 1 8 bach16
+application_1512839220296_0019_1 self-logs/kdd12-1-8-1-0.0000001-0 1 8 bach16
+application_1512839220296_0020_1 self-logs/kdd12-1-8-1-0.00000001-0 1 8 bach16
